@@ -58,6 +58,7 @@ void print(scheme_value value) {
             }
             return;
     }
+    printf("#<unknown 0x%08x>", value);
 }
 
 int main(int argc, char** argv) {

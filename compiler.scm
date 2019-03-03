@@ -30,13 +30,17 @@
     )
 )
 
+(define (emit-expr x)
+    (emit " movl $~s, %eax" (represent x))
+)
+
 (define (emit-program x)
     (unless (immediate? x) (error 'emit "unknow value"))
     (emit " .text")
     (emit " .globl scheme_entry")
     (emit " .type scheme_entry, @function")
     (emit "scheme_entry:")
-    (emit " movl $~s, %eax" (represent x))
+    (emit-expr x)
     (emit " ret")
     (emit " .size scheme_entry, .-scheme_entry")
 )
