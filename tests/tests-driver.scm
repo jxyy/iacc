@@ -89,9 +89,7 @@
         [type (cadr test)]
         [out  (caddr test)])
     (printf "Test ~s:~s ..." test-id expr)
-    (printf "aaa")
     (flush-output-port)
-    (printf "bbb")
     (case type
      [(string) (test-with-string-output test-id expr out)]
      [else (error 'test (format "Invalid test type ~s." type))])
