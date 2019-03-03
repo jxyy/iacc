@@ -1,0 +1,6 @@
+build/*
+inc/*
+*.out
+test.scm
+test_c.c
+*.swp

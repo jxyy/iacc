@@ -1,0 +1,12 @@
+(load "tests/tests-driver.scm")
+
+(define (emit-program x)
+    (unless (integer? x) (error 'emit "unknow value"))
+    (emit " .text")
+    (emit " .globl scheme_entry")
+    (emit " .type scheme_entry, @function")
+    (emit "scheme_entry:")
+    (emit " movl $~s, %eax" x)
+    (emit " ret")
+    (emit " .size scheme_entry, .-scheme_entry")
+)
