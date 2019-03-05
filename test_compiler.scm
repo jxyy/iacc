@@ -1,4 +1,5 @@
 (load "compiler.scm")
+(load "lib.scm")
 (load "tests/tests-1.1-req.scm")
 (load "tests/tests-1.2-req.scm")
 (load "tests/tests-1.3-req.scm")

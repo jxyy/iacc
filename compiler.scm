@@ -60,12 +60,6 @@
     )
 )
 
-;; native unary primitives
-(define-primitive (fxadd1 expr) 
-    (emit-expr expr)
-    (emit " addl $~s, %eax" (emit-immediate 1))
-)
-
 ;; core
 (define (emit-expr expr)
     (cond
