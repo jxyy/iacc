@@ -62,24 +62,41 @@
 )
 
 ;; for conditional
+(define unique-label
+	(let ([count 0])
+        (lambda ()
+            (let ([L (format "L_~s" count)])
+                (set! count (add1 count))
+                L))))
+
 (define (if? expr)
     (and (list? expr) (symbol? (car expr)) (symbol=? 'if (car expr)))
 )
 
 (define (emit-if expr)
-    (let [(test-expr (car expr)) (conseq-expr (cadr expr)) (altern-expr (caddr expr))] 
-        (body-todo)
+    (let [(test-expr (cadr expr)) (conseq-expr (caddr expr)) (altern-expr (cadddr expr)) (alt-label (unique-label)) (end-label (unique-label))] 
+        (emit-expr test-expr)
+        (emit "     cmpl $47,   %eax") ;bool-#f
+        (emit "     je   ~a" alt-label)
+        (emit-expr conseq-expr)
+        (emit "     jmp  ~a" end-label)
+        (emit "~a:" alt-label)
+        (emit-expr altern-expr)
+        (emit "~a:" end-label)
     )
 )
 
+
 ;; core
 (define (emit-expr expr)
+    ;(and (printf (format "??? ~s ~s\n" expr (symbol? expr)))
     (cond
         [(immediate? expr) (emit " movl $~s, %eax" (emit-immediate expr))]
         [(primcall? expr) (emit-primcall expr)]
         [(if? expr) (emit-if expr)]
-        [else (error 'emit "unknow expr")]
+        [else (error 'emit (format "unknow expr ~s ~s ~s." (list? expr) (symbol? expr) (symbol=? 'if expr) ))]
     )
+    ;)
 )
 
 (define (emit-program x)
