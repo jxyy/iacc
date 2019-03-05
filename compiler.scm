@@ -29,6 +29,7 @@
         ((boolean? x)       (fxlogor bool_tag (ash (if x 1 0) bool_tag_width)))
         ((empty-list? x)    (fxlogor empty_list_tag (ash 0 empty_list_tag_width)))
         ((char? x)          (fxlogor char_tag (ash (char->integer x) char_tag_width)))
+        (else (error 'emit-immediate "unknow immediate"))
     )
 )
 
@@ -60,11 +61,23 @@
     )
 )
 
+;; for conditional
+(define (if? expr)
+    (and (list? expr) (symbol? (car expr)) (symbol=? 'if (car expr)))
+)
+
+(define (emit-if expr)
+    (let [(test-expr (car expr)) (conseq-expr (cadr expr)) (altern-expr (caddr expr))] 
+        (body-todo)
+    )
+)
+
 ;; core
 (define (emit-expr expr)
     (cond
         [(immediate? expr) (emit " movl $~s, %eax" (emit-immediate expr))]
         [(primcall? expr) (emit-primcall expr)]
+        [(if? expr) (emit-if expr)]
         [else (error 'emit "unknow expr")]
     )
 )
