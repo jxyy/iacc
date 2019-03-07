@@ -1,6 +1,8 @@
 #include<stdio.h>
+#include<sys/mman.h>
+#include<unistd.h>
 
-extern unsigned int scheme_entry();
+extern unsigned int scheme_entry(char* stack_index);
 
 #define INT_TAG_WIDTH 2
 #define INT_TAG 0x0
@@ -12,6 +14,39 @@ extern unsigned int scheme_entry();
 #define CHAR_TAG 0x0f
 
 typedef unsigned int scheme_value;
+
+static char* allocate_protected_space(int size){
+	int page = getpagesize();
+	int aligned_size = ((size + page - 1) / page) * page;
+	char* p = mmap(0, aligned_size + 2 * page,
+					PROT_READ | PROT_WRITE,
+					MAP_ANONYMOUS | MAP_PRIVATE,
+					0, 0);
+	if (p == MAP_FAILED){
+        printf("allocate space failed");
+		return NULL;
+	}
+	int status = mprotect(p, page, PROT_NONE);
+	if(status != 0){
+        printf("make protected page failed: %d", status);
+		return NULL;
+	}
+	status = mprotect(p + page + aligned_size, page, PROT_NONE);
+	if(status != 0){
+        printf("make protected page failed: %d", status);
+		return NULL;
+	}
+	return (p + page);
+}
+
+static void deallocate_protected_space(char* p, int size){
+	int page = getpagesize();
+	int aligned_size = ((size + page - 1) / page) * page;
+	int status = munmap(p - page, aligned_size + 2 * page);
+	if(status != 0){
+		printf("deallocate space failed: %d", status);
+	}
+}
 
 void print(scheme_value value) {
     scheme_value tag2 = value & 0x3;
@@ -63,6 +98,13 @@ void print(scheme_value value) {
 
 int main(int argc, char** argv) {
     //printf("%d\n", scheme_entry());
-    print(scheme_entry());
+    int stack_size = 16 * 4096;
+	char* stack_top = allocate_protected_space(stack_size);
+    char* stack_base = stack_top + stack_size;
+    if (stack_top == NULL) {
+        return 0;
+    }
+    print(scheme_entry(stack_base));
+    deallocate_protected_space(stack_top, stack_size);
     return 0;
 }
