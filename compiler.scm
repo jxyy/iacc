@@ -36,11 +36,11 @@
 ;; for primitive
 (define-syntax define-primitive
     (syntax-rules ()
-        [(_ (prim-name arg* ...) b b* ...)
+        [(_ (prim-name si arg* ...) b b* ...)
             (begin
                 (putprop 'prim-name '*is-prim* #t)
                 (putprop 'prim-name '*arg-count* (length '(arg* ...)))
-                (putprop 'prim-name '*emitter* (lambda (arg* ...) b b* ...)))]))
+                (putprop 'prim-name '*emitter* (lambda (si arg* ...) b b* ...)))]))
 
 (define (primitive? x)
     (and (symbol? x) (getprop x '*is-prim*))
@@ -54,10 +54,10 @@
     (and (pair? expr) (primitive? (car expr)))
 )
 
-(define (emit-primcall expr)
+(define (emit-primcall si expr)
     (let ([prim (car expr)] [args (cdr expr)])
         ;(check-primcall-args prim args)
-        (apply (primitive-emitter prim) args)
+        (apply (primitive-emitter prim) si args)
     )
 )
 
@@ -73,27 +73,28 @@
     (and (list? expr) (symbol? (car expr)) (symbol=? 'if (car expr)))
 )
 
-(define (emit-if expr)
+(define (emit-if si expr)
     (let [(test-expr (cadr expr)) (conseq-expr (caddr expr)) (altern-expr (cadddr expr)) (alt-label (unique-label)) (end-label (unique-label))] 
-        (emit-expr test-expr)
+        (emit-expr si test-expr)
         (emit "     cmpl $47,   %eax") ;bool-#f
         (emit "     je   ~a" alt-label)
-        (emit-expr conseq-expr)
+        (emit-expr si conseq-expr)
         (emit "     jmp  ~a" end-label)
         (emit "~a:" alt-label)
-        (emit-expr altern-expr)
+        (emit-expr si altern-expr)
         (emit "~a:" end-label)
     )
 )
 
 
 ;; core
-(define (emit-expr expr)
+(define wordsize 4)
+(define (emit-expr si expr)
     ;(and (printf (format "??? ~s ~s\n" expr (symbol? expr)))
     (cond
         [(immediate? expr) (emit " movl $~s, %eax" (emit-immediate expr))]
-        [(primcall? expr) (emit-primcall expr)]
-        [(if? expr) (emit-if expr)]
+        [(primcall? expr) (emit-primcall si expr)]
+        [(if? expr) (emit-if si expr)]
         [else (error 'emit (format "unknow expr ~s ~s ~s." (list? expr) (symbol? expr) (symbol=? 'if expr) ))]
     )
     ;)
@@ -104,7 +105,10 @@
     (emit " .globl scheme_entry")
     (emit " .type scheme_entry, @function")
     (emit "scheme_entry:")
-    (emit-expr x)
+    (emit " movq %rsp, %rsi")
+    (emit " movq %rdi, %rsp")
+    (emit-expr (- wordsize) x)
+    (emit " movq %rsi, %rsp")
     (emit " ret")
     (emit " .size scheme_entry, .-scheme_entry")
 )
