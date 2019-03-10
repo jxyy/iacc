@@ -94,6 +94,12 @@
     ))
 )
 
+(define (let*? expr)
+    (and (list? expr) (let ([fst (car expr)]) 
+        (and (symbol? fst) (symbol=? 'let* fst))
+    ))
+)
+
 (define (let-bindings expr)
     (cadr expr)
 )
@@ -127,21 +133,45 @@
 )
 
 (define (emit-let si env expr) 
-    (let iter ([bindings (let-bindings expr)] [si si] [env (new-env env)]) 
+    (let iter ([bindings (let-bindings expr)] [si si] [local-env (new-env env)]) 
         (cond
-            [(null? bindings) (emit-expr si env (let-body expr))]
+            [(null? bindings) (emit-expr si local-env (let-body expr))]
             [else
                 (let ([b (car bindings)]) 
                     (emit-expr si env (rhs b))
                     (emit "movl %eax, ~s(%rsp)" si)
-                    (env-set! env (lhs b) si)
-                    (iter (cdr bindings) (- si wordsize) env)
+                    (env-set! local-env (lhs b) si)
+                    (iter (cdr bindings) (- si wordsize) local-env)
                 )
             ]
         )
     )
 )
 
+(define (emit-let* si env expr) 
+    (let iter ([bindings (let-bindings expr)] [si si] [env (new-env env)]) 
+        (cond
+            [(null? bindings) (emit-expr si env (let-body expr))]
+            [else
+                (let* ([b (car bindings)] [variable (lhs b)] [exist-si (env-lookup env variable)]) 
+                    (emit-expr si env (rhs b))
+                    (cond
+                        [(= exist-si 0) 
+                            (emit "movl %eax, ~s(%rsp) # new binding" si)
+                            (env-set! env variable si)
+                            (iter (cdr bindings) (- si wordsize) env)
+                        ]
+                        [else
+                            (emit "movl %eax, ~s(%rsp) # overwrite binding" exist-si)
+                            (env-set! env variable exist-si)
+                            (iter (cdr bindings) si env)
+                        ]
+                    )
+                )
+            ]
+        )
+    )
+)
 
 ;; for variable
 (define (variable? expr)
@@ -163,6 +193,7 @@
         [(primcall? expr) (emit-primcall si env expr)]
         [(if? expr) (emit-if si env expr)]
         [(let? expr) (emit-let si env expr)] 
+        [(let*? expr) (emit-let* si env expr)] 
         [(variable? expr) (emit-load-variable env expr)]
         [else (error 'emit (format "unknow expr ~s ~s ~s." (list? expr) (symbol? expr) (symbol=? 'if expr) ))]
     )
