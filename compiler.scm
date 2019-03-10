@@ -36,11 +36,11 @@
 ;; for primitive
 (define-syntax define-primitive
     (syntax-rules ()
-        [(_ (prim-name si arg* ...) b b* ...)
+        [(_ (prim-name si env arg* ...) b b* ...)
             (begin
                 (putprop 'prim-name '*is-prim* #t)
                 (putprop 'prim-name '*arg-count* (length '(arg* ...)))
-                (putprop 'prim-name '*emitter* (lambda (si arg* ...) b b* ...)))]))
+                (putprop 'prim-name '*emitter* (lambda (si env arg* ...) b b* ...)))]))
 
 (define (primitive? x)
     (and (symbol? x) (getprop x '*is-prim*))
@@ -54,10 +54,10 @@
     (and (pair? expr) (primitive? (car expr)))
 )
 
-(define (emit-primcall si expr)
+(define (emit-primcall si env expr)
     (let ([prim (car expr)] [args (cdr expr)])
         ;(check-primcall-args prim args)
-        (apply (primitive-emitter prim) si args)
+        (apply (primitive-emitter prim) si env args)
     )
 )
 
@@ -73,28 +73,97 @@
     (and (list? expr) (symbol? (car expr)) (symbol=? 'if (car expr)))
 )
 
-(define (emit-if si expr)
+(define (emit-if si env expr)
     (let [(test-expr (cadr expr)) (conseq-expr (caddr expr)) (altern-expr (cadddr expr)) (alt-label (unique-label)) (end-label (unique-label))] 
-        (emit-expr si test-expr)
+        (emit-expr si env test-expr)
         (emit "     cmpl $47,   %eax") ;bool-#f
         (emit "     je   ~a" alt-label)
-        (emit-expr si conseq-expr)
+        (emit-expr si env conseq-expr)
         (emit "     jmp  ~a" end-label)
         (emit "~a:" alt-label)
-        (emit-expr si altern-expr)
+        (emit-expr si env altern-expr)
         (emit "~a:" end-label)
     )
 )
 
+;; for local variable
+;; (let ([var val] ...) <body>)
+(define (let? expr)
+    (and (list? expr) (let ([fst (car expr)]) 
+        (and (symbol? fst) (symbol=? 'let fst))
+    ))
+)
+
+(define (let-bindings expr)
+    (cadr expr)
+)
+
+(define (let-body expr)
+    (caddr expr)
+)
+
+(define (lhs binding)
+    (car binding)
+)
+
+(define (rhs binding)
+    (cadr binding)
+)
+
+(define (make-env)
+    (make-eq-hashtable)
+)
+
+(define (new-env env)
+    (hashtable-copy env #t)
+)
+
+(define (env-set! env variable si)
+    (eq-hashtable-set! env variable si)
+)
+
+(define (env-lookup env variable)
+    (eq-hashtable-ref env variable 0)
+)
+
+(define (emit-let si env expr) 
+    (let iter ([bindings (let-bindings expr)] [si si] [env (new-env env)]) 
+        (cond
+            [(null? bindings) (emit-expr si env (let-body expr))]
+            [else
+                (let ([b (car bindings)]) 
+                    (emit-expr si env (rhs b))
+                    (emit "movl %eax, ~s(%rsp)" si)
+                    (env-set! env (lhs b) si)
+                    (iter (cdr bindings) (- si wordsize) env)
+                )
+            ]
+        )
+    )
+)
+
+
+;; for variable
+(define (variable? expr)
+    (symbol? expr)
+)
+
+(define (emit-load-variable env expr)
+    (let ((si (env-lookup env expr))) 
+        (emit "movl ~s(%rsp), %eax" si)
+    )
+)
 
 ;; core
 (define wordsize 4)
-(define (emit-expr si expr)
+(define (emit-expr si env expr)
     ;(and (printf (format "??? ~s ~s\n" expr (symbol? expr)))
     (cond
         [(immediate? expr) (emit " movl $~s, %eax" (emit-immediate expr))]
-        [(primcall? expr) (emit-primcall si expr)]
-        [(if? expr) (emit-if si expr)]
+        [(primcall? expr) (emit-primcall si env expr)]
+        [(if? expr) (emit-if si env expr)]
+        [(let? expr) (emit-let si env expr)] 
+        [(variable? expr) (emit-load-variable env expr)]
         [else (error 'emit (format "unknow expr ~s ~s ~s." (list? expr) (symbol? expr) (symbol=? 'if expr) ))]
     )
     ;)
@@ -107,7 +176,7 @@
     (emit "scheme_entry:")
     (emit " movq %rsp, %rsi")
     (emit " movq %rdi, %rsp")
-    (emit-expr (- wordsize) x)
+    (emit-expr (- wordsize) (make-env) x)
     (emit " movq %rsi, %rsp")
     (emit " ret")
     (emit " .size scheme_entry, .-scheme_entry")
