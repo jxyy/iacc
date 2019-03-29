@@ -184,6 +184,35 @@
     )
 )
 
+
+;; for letrec
+(define (letrec? expr)
+    (and (list? expr) (not (null? expr)) (symbol? (car expr)) (symbol=? (car expr) 'letrec))
+)
+
+(define (letrec-bindings expr)
+    (cadr expr)
+)
+
+(define (letrec-body expr)
+    (caddr expr)
+)
+
+(define (unique-labels lvars)
+    ;; todo
+)
+
+(define (emit-letrec si env expr)
+    (emit ";TODO")
+    (let* ([bindings (letrec-bindings expr)]
+           [lvars (map lhs bindings)]
+           [lambdas (map rhs bindings)]
+           [labels (unique-labels lvars)])
+
+        (for-each (lambda ))        
+    )
+)
+
 ;; core
 (define wordsize 4)
 (define (emit-expr si env expr)
@@ -200,15 +229,25 @@
     ;)
 )
 
-(define (emit-program x)
+(define (emit-scheme-entry si env expr)
     (emit " .text")
     (emit " .globl scheme_entry")
     (emit " .type scheme_entry, @function")
     (emit "scheme_entry:")
     (emit " movq %rsp, %rsi")
     (emit " movq %rdi, %rsp")
-    (emit-expr (- wordsize) (make-env) x)
+    (emit-expr si env expr)
     (emit " movq %rsi, %rsp")
     (emit " ret")
     (emit " .size scheme_entry, .-scheme_entry")
+)
+
+(define (emit-program x)
+    (let ([si (- wordsize)] [env (make-env)])
+        (if (letrec? x) 
+            (emit-letrec si env x)
+            (emit-scheme-entry si env x)
+        )
+    )
+
 )
